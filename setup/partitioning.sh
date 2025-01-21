@@ -1,74 +1,144 @@
 #!/bin/bash
 
-pacman -Syy fzf # Display storage name
+########################################################################################
+# Disk Partitioning Module                                                             #
+# Description: Interactive disk selection and partitioning for Arch Linux installation #
+########################################################################################
 
-echo -e "\n\n========== Partitioning disk ==========\n\n"
+get_available_disks() { 
+    local disks=$(lsblk -dpno NAME,SIZE,MODEL | grep -E '^/dev/(sd|nvme|vd)')
 
-# Detect storage device name
-STORAGE_DEVICES=$(lsblk -dn -o NAME,SIZE | awk '{print "/dev/" $1 " - " $2}')
-echo "Select a storage device using arrow keys:"
-SELECTED_STORAGE_DEVICE=$(echo "$STORAGE_DEVICES" | fzf --prompt="Storage Device>" --height=10 --border)
-if [ -z "$SELECTED_STORAGE_DEVICE" ]; then
-    echo "No device selected!"
-else
-    SELECTED_STORAGE_DEVICE=$(echo "$SELECTED_STORAGE_DEVICE" | awk '{print $1}')
-    echo "You selected: $SELECTED_STORAGE_DEVICE"
-fi
+    if [[ -z "$disks" ]]; then
+        error "No suitable disks found"
+    fi
 
-# Setup boot partition size
-BOOT_PARTITION_SIZE="256" # NOTE: MB
-read -p "Boot partition size (default = $BOOT_PARTITION_SIZE MB): " input
-BOOT_PARTITION_SIZE=${input:-$BOOT_PARTITION_SIZE}
-echo "Boot partition size you chose: $BOOT_PARTITION_SIZE MB"
+    echo "$disks"
+}
 
-# Setup swap partition size
-RAM_SIZE=$(grep MemTotal /proc/meminfo| awk '{print $2}')
-RAM_SIZE=$(echo "scale=0;($RAM_SIZE+1048575)/1048576" | bc)
-echo "Detected RAM size: $RAM_SIZE GB"
-SWAP_PARTITION_SIZE=$((RAM_SIZE*2)) # NOTE: GB
-read -p "Swap partition size (default = $SWAP_PARTITION_SIZE GB): " input
-SWAP_PARTITION_SIZE=${input:-$SWAP_PARTITION_SIZE}
-echo "Swap partition size you chose: $SWAP_PARTITION_SIZE GB"
+select_disk() {
+    local selected_disk=$(get_available_disks | fzf --height 10 \
+        --header="Select disk for installation (Use arrow keys, press Enter to select)" \
+        --layout=reverse)
 
-# to create the partitions programatically (rather than manually)
-# we're going to simulate the manual input to fdisk
-# The sed script strips off all the comments so that we can 
-# document what we're doing in-line with the actual commands
-# Note that a blank line (commented as "default" will send a empty
-# line terminated with a newline to take the fdisk default.
-sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | fdisk ${SELECTED_STORAGE_DEVICE}
-    d # delete old partition
-    d # delete old partition
-    d # delete old partition
-    o # clear the in memory partition table
-    n # new partition
-    p # primary partition
-    1 # partition number 1
-      # default - start at beginning of disk
-    +${BOOT_PARTITION_SIZE}M # boot partition size
-    n # new partition
-    p # primary partition
-    2 # partion number 2
-      # default, start immediately after preceding partition
-    -${SWAP_PARTITION_SIZE}G # Double size of your ram
-    n # new partition
-    p # primary partition
-    3 # partion number 2
-      # default, start immediately after preceding partition
-      # default, extend partition to end of disk
-    t # change partition types
-    1 # bootable partition is partition 1 -- /dev/sda1
-    uefi # Boot partition UEFI
-    t # change partition types
-    2 # bootable partition is partition 2 -- /dev/sda2
-    linux # Linux partition
-    t # change partition types
-    3 # bootable partition is partition 3 -- /dev/sda3
-    swap # Linux partition
-    w # write the partition table
-    q # and we're done
-EOF
+    if [[ -z "$selected_disk" ]]; then
+        error "No disk selected"
+    fi
 
-mkfs.fat -F 32 "${SELECTED_STORAGE_DEVICE}1"
-mkfs -t ext4 "${SELECTED_STORAGE_DEVICE}2"
-mkswap "${SELECTED_STORAGE_DEVICE}3"
+    echo "$selected_disk" | cut -d' ' -f1
+}
+
+get_ram_size() {
+    local mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    local mem_gb=$(((mem_kb + 1048575) / 1048576))
+    echo "$mem_gb"
+}
+
+calculate_swap_size() {
+    local ram_size=$(get_ram_size)
+    local swap_size
+
+    if (( ram_size <= 2 )); then
+        swap_size=$((ram_size * 2))
+    elif (( ram_size <= 8 )); then
+        swap_size=$ram_size
+    elif (( ram_size <= 64 )); then
+        swap_size=$((ram_size / 2))
+    else
+        swap_size=32
+    fi
+
+    echo "$swap_size"
+}
+
+confirm_disk_operation() {
+    local disk="$1"
+    local swap_size="$2"
+
+    warn "WARNING: This will erase ALL data on $disk"
+    info "Disk: $disk"
+    info "EFI Partition: 256MB"
+    info "Swap Partition: ${swap_size}GB"
+    info "Root Partition: Remaining space"
+
+    read -p "Do you want to continue? (y/N) " response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        error "Operation cancelled by user"
+    fi
+}
+
+create_partitions() {
+    local disk="$1"
+    local swap_size="$2"
+
+    log "Creating partitions on $disk..."
+
+    # Erase disk signatures
+    wipefs -af "$disk"
+
+    # Create GPT partition table
+    parted -s "$disk" mklabel gpt
+
+    # Create partitions
+    local current_position=1
+
+    log "Creating EFI partition..."
+    parted -s "$disk" mkpart primary fat32 "${current_position}MiB" "256MiB"
+    parted -s "$disk" set 1 esp on
+    current_position=256
+
+    log "Creating swap partition..."
+    local swap_end=$((current_position + swap_size * 1024))
+    parted -s "$disk" mkpart primary linux-swap "${current_position}MiB" "${swap_end}MiB"
+    current_position=$swap_end
+
+    log "Create root partition..."
+    parted -s "$disk" mkpart primary ext4 "${current_position}MiB" 100%
+
+    # Wait for partitions to be created
+    sleep 2
+}
+
+format_partitions() {
+    local disk="$1"
+    local partition_prefix
+
+    if [[ "$disk" =~ "nvme" ]]; then
+        partition_prefix="${disk}p"
+    else
+        partition_prefix="${disk}"
+    fi
+
+    log "Formatting partitions..."
+
+    info "Formatting EFI partition..."
+    mkfs.fat -F32 "${partition_prefix}1"
+
+    info "Formatting swap partition..."
+    mkswap "${partition_prefix}2"
+
+    info "Formatting root partition..."
+    mkfs.ext4 -F "${partition_prefix}3"
+}
+
+mount_partitions() {
+    local disk="$1"
+    local partition_prefix
+
+    if [[ "$disk" =~ "nvme" ]]; then
+        partition_prefix="${disk}p"
+    else
+        partition_prefix="${disk}"
+    fi
+
+    log "Mounting partitions..."
+
+    # Mount root partition
+    mount "${partition_prefix}3" /mnt
+
+    # Create and mount EFI directory
+    mkdir -p /mnt/boot/efi
+    mount "${partition_prefix}1" /mnt/boot/efi
+
+    # Enable swap
+    swapon "${partition_prefix}2"
+}
