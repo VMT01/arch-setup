@@ -154,5 +154,5 @@ install_essential_packages() {
         sudo \
         vim
 
-    genfstab -U -p /mnt > /mnt/etc/fstab
+    genfstab -U -p /mnt > /mnt/etc/fstab || error "Failed to generate fstab"
 }
