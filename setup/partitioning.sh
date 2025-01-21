@@ -142,3 +142,17 @@ mount_partitions() {
     # Enable swap
     swapon "${partition_prefix}2"
 }
+
+install_essential_packages() {
+    log "Install essential packages..."S
+
+    pacstrap -i /mnt \
+        base \
+        base-devel \
+        linux \
+        linux-firmware \
+        sudo \
+        vim
+
+    genfstab -U -p /mnt > /mnt/etc/fstab
+}

@@ -19,3 +19,4 @@ create_partitions "$SELECTED_DISK" "$SWAP_SIZE"
 format_partitions "$SELECTED_DISK"
 mount_partitions "$SELECTED_DISK"
 log "Disk partitioning completed successfully"
+install_essential_packages
