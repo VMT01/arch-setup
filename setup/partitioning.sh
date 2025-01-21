@@ -144,15 +144,13 @@ mount_partitions() {
 }
 
 install_essential_packages() {
-    log "Install essential packages..."S
+    log "Install essential packages..."
 
     pacstrap -i /mnt \
-        base \
-        base-devel \
-        linux \
-        linux-firmware \
-        sudo \
-        vim
+        base base-devel \
+        linux linux-firmware \
+        sudo vim \
+        --noconfirm
 
     genfstab -U -p /mnt > /mnt/etc/fstab || error "Failed to generate fstab"
 }

@@ -67,3 +67,11 @@ enable_pacman_parallel() {
         log "Added ParallelDownloads configuration with default value is 5"
     fi
 }
+
+install_necessary_packages() {
+    local packages=(
+        "fzf"
+    )
+
+    pacman -S "${packages[@]}" --noconfirm --needed || error "Failed to install neccessary packages"
+}

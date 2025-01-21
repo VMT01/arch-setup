@@ -10,12 +10,12 @@ enable_pacman_parallel
 
 # Synchronize pacman packages
 pacman -Syy
+install_necessary_packages
 
 # Disk partitioning
 source ./setup/partitioning.sh
 SELECTED_DISK=$(select_disk)
 SWAP_SIZE=$(calculate_swap_size)
-pacman -S fzf --noconfirm --needed --quiet
 confirm_disk_operation "$SELECTED_DISK" "$SWAP_SIZE"
 create_partitions "$SELECTED_DISK" "$SWAP_SIZE"
 format_partitions "$SELECTED_DISK"

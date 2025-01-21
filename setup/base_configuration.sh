@@ -17,7 +17,7 @@ install_base_packages() {
         "efibootmgr"
         "dhcpcd"
         "networkmanager"
-        "resolvconf"
+        "resolvconf" # Failed here
     )
 
     pacstrap /mnt "${base_packages[@]}" || error "Failed to install base packages"
