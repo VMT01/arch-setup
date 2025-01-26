@@ -1,10 +1,17 @@
 #!/bin/bash
 
 enable_pacman_parallel_download() {
+    clear
+
+    log "Enabling pacman parallel downloads..."
     sed -i 's/^#\(ParallelDownloads = 5\)/\1/' /etc/pacman.conf
+
+    sleep 2
 }
 
 install_necessary_packages() {
+    clear 
+
     log "Install neccessary packages..."
 
     local packages=(
@@ -12,6 +19,8 @@ install_necessary_packages() {
     )
 
     pacman -S "${packages[@]}" --noconfirm --needed || error "Failed to install neccessary packages"
+
+    sleep 2
 }
 
 select_disk() {
@@ -44,6 +53,8 @@ select_swap_size() {
 }
 
 confirm_disk_operation() {
+    clear
+
     local disk="$1"
     local swap_size="$2"
 
@@ -57,22 +68,30 @@ confirm_disk_operation() {
     if [[ ! "$response" =~ ^[Yy]$ ]]; then
         error "Operation cancelled by user"
     fi
+
+    sleep 2
 }
 
 wipe_partition_table() {
+    clear
+
     log "Wiping existing partition table..."
 
     local disk="$1"
 
     wipefs -af "$disk"
     parted -s "$disk" mklabel gpt
+
+    sleep 2
 }
 
 disk_partitioning() {
-    local disk="$1"
-    local swap_size="$2"
+    clear
 
     log "Disk partitioning on $disk..."
+
+    local disk="$1"
+    local swap_size="$2"
 
     # Create partitions
     local current_position=1
@@ -95,6 +114,10 @@ disk_partitioning() {
 }
 
 disk_formatting() {
+    clear
+
+    log "Formatting partitions..."
+
     local disk="$1"
     local partition_prefix
 
@@ -104,20 +127,22 @@ disk_formatting() {
         partition_prefix="${disk}"
     fi
 
-    log "Formatting partitions..."
 
     info "Formatting EFI partition..."
     mkfs.fat -F32 "${partition_prefix}1"
-    mkdir -p /mnt/boot/efi
-    mount "${partition_prefix}1" /mnt/boot/efi
 
     info "Formatting swap partition..."
     mkswap "${partition_prefix}2"
-    swapon "${partition_prefix}2"
 
     info "Formatting root partition..."
     mkfs.ext4 -F "${partition_prefix}3"
+
     mount "${partition_prefix}3" /mnt
+    mkdir -p /mnt/boot/efi
+    mount "${partition_prefix}1" /mnt/boot/efi
+    swapon "${partition_prefix}2"
+
+    sleep 2
 }
 
 main() {

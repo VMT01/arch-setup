@@ -5,6 +5,8 @@ readonly DEFAULT_HOSTNAME="arch-linux"
 readonly DEFAULT_USERNAME="arch"
 
 configure_locale() {
+    clear
+
     log "Configuring locale..."
 
     arch-chroot /mnt bash <<EOF
@@ -12,9 +14,13 @@ sed -i 's/^#\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
 locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 EOF
+
+    sleep 2
 }
 
 configure_timezone() {
+    clear
+
     log "Configuring timezone..."
 
     local timezone=$(tzselect)
@@ -27,9 +33,13 @@ configure_timezone() {
 ln -sf /usr/share/zoneinfo/${timezone} /etc/localtime
 hwclock --systohc
 EOF
+
+    sleep 2
 }
 
 configure_system_hostname() {
+    clear
+
     log "Configuring system hostname..."
 
     local hostname="$1:-$DEFAULT_HOSTNAME"
@@ -40,9 +50,13 @@ configure_system_hostname() {
 ::1       localhost
 127.0.1.1 $hostname
 EOF
+
+    sleep 2
 }
 
 configure_user() {
+    clear
+
     log "Configuring user..."
 
     info "Setting password for root"
@@ -55,9 +69,13 @@ configure_user() {
     arch-chroot /mnt passwd "${username}"
 
     sed -i 's/^# \(%wheel ALL=(ALL:ALL) ALL\)/\1/' /mnt/etc/sudoers
+
+    sleep 2
 }
 
 configure_bootloader() {
+    clear
+
     log "Configuring boot loader..."
 
     local packages=(
@@ -66,13 +84,23 @@ configure_bootloader() {
     )
 
     pacstrap /mnt "${packages[@]}" || error "Failed to install bootloader dependencies"
+
+    # if ! mountpoint -q /mnt/boot/efi; then
+    #     mount /dev/sda1 /mnt/boot/efi || error "Failed to mount EFI partition"
+    # fi
+
     arch-chroot /mnt bash <<EOF
+set -e
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 EOF
+
+    sleep 2
 }
 
 configure_network() {
+    clear
+
     log "Configuring network..."
 
     local packages=(
@@ -83,10 +111,13 @@ configure_network() {
 
     pacstrap /mnt "${packages[@]}" || error "Failed to install network dependencies"
     arch-chroot /mnt bash <<EOF
+set -e
 systemctl enable dhcpcd
 systemctl enable NetworkManager
 systemctl enable systemd-resolved
 EOF
+
+    sleep 2
 }
 
 main() {

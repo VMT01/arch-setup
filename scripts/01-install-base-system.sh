@@ -1,6 +1,8 @@
 #!/bin/bash
 
 install_base_system_packages() {
+    clear
+
     log "Installing base packages..."
 
     local packages=(
@@ -13,12 +15,18 @@ install_base_system_packages() {
     )
 
     pacstrap /mnt "${packages[@]}" || error "Failed to install base packages"
+
+    sleep 2
 }
 
 generate_fstab() {
+    clear
+
     log "Generating fstab..."
 
     genfstab -U -p /mnt > /mnt/etc/fstab
+
+    sleep 2
 }
 
 main() {
