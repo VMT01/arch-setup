@@ -16,6 +16,7 @@ install_necessary_packages() {
 
     local packages=(
         "fzf"
+        "archlinux-keyring"
     )
 
     pacman -S "${packages[@]}" --noconfirm --needed || error "Failed to install neccessary packages"

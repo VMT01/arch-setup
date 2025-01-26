@@ -109,27 +109,7 @@ configure_network() {
         "resolvconf"
     )
 
-    # Work around to pass PGP error
-    local attempt=0
-    readonly local MAX_RETRY=5
-
-    while [ $attempt -lt $MAX_RETRY ]; do
-        pacman-key --init
-        pacman-key --populate archlinux
-
-        if pacstrap /mnt "${packages[@]}"; then
-            break
-        else
-            warn "Error: pacstrap failed. Retrying..."
-            attempt=$((attempt + 1))
-            sleep 2
-        fi
-    done
-
-    if [ $attempt -eq $MAX_RETRIES ]; then
-        error "Error: pacstrap failed after $MAX_RETRIES attempts."
-    fi
-
+    pacstrap /mnt "${packages[@]}" || error "Failed to install network dependencies"
     arch-chroot /mnt bash <<EOF
 set -e
 systemctl enable dhcpcd
