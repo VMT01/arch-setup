@@ -1,5 +1,9 @@
 #!/bin/bash
 
+enable_pacman_parallel_download() {
+    sed -i 's/^#\(ParallelDownloads = 5\)/\1/' /etc/pacman.conf
+}
+
 install_necessary_packages() {
     log "Install neccessary packages..."
 
@@ -117,6 +121,7 @@ disk_formatting() {
 }
 
 main() {
+    enable_pacman_parallel_download
     install_necessary_packages
 
     local disk=$(select_disk)
